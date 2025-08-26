@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registro para la reunión en línea</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body style="background-color:#f3f5f7;">
+    <div class="container my-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-dark text-white d-flex align-items-center">
+                        <img src="https://raw.githubusercontent.com/kloudpaper/dikevi-chimie/main/imagotipo4.png" width="120" alt="Dikevi Chimie" class="me-3">
+                        <span>Potenciamos todos los procesos industriales con espectroscopía</span>
+                    </div>
+                    <div class="card-body">
+                        <h2 class="mb-4">Registro para Sesión de cinética en vivo</h2>
+                        <form id="regForm">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Nombre completo</label>
+                                <input required type="text" name="name" id="name" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Correo electrónico</label>
+                                <input required type="email" name="email" id="email" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label for="position" class="form-label">Título o puesto <span class="text-muted"></span></label>
+                                <input type="text" name="position" id="position" class="form-control">
+                            </div>
+                            <div class="mb-3">
+                                <label for="orgType" class="form-label">Tipo de organización</label>
+                                <select name="orgType" id="orgType" class="form-select">
+                                    <option value="">Seleccione...</option>
+                                    <option value="academia">Academia</option>
+                                    <option value="gobierno">Gobierno</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="orgName" class="form-label">Nombre de la organización <span class="text-muted"></span></label>
+                                <input type="text" name="orgName" id="orgName" class="form-control">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" name="optIn" id="optIn" value="yes" class="form-check-input">
+                                <label for="optIn" class="form-check-label">Quiero recibir información y mensajes relacionados</label>
+                            </div>
+                            <button type="submit" class="btn btn-dark w-100">Registrarse y recibir invitación</button>
+                            <p id="status" role="status" aria-live="polite" class="mt-3 text-muted"></p>
+                        </form>
+                    </div>
+                    <div class="card-footer text-center" style="background:#f7f9fb;">
+                        <small class="text-secondary">© Dikevi Chimie Technologie. Todos los derechos reservados.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="app.js" defer></script>
+    <!-- Bootstrap JS (optional, for interactive components) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
