@@ -1,3 +1,4 @@
+const API_BASE = 'https://meeting-invite.onrender.com';
 const form = document.getElementById('regForm');
 const statusEl = document.getElementById('status');
 
@@ -16,7 +17,7 @@ form.addEventListener('submit', async (e) => {
   };
 
   try {
-    const res = await fetch('/register', {
+      const res = await fetch(`${API_BASE}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

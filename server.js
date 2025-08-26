@@ -1,3 +1,5 @@
+// JavaScript source code
+const cors = require('cors');
 // server.js
 require('dotenv').config();
 
@@ -8,6 +10,19 @@ const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+app.use(cors({
+    origin: [
+        'https://kloudpaper.github.io' // your GitHub Pages origin
+        // (paths like /meeting-invite-frontend are fine; origin = scheme+host)
+    ],
+    methods: ['POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
+app.use(bodyParser.json());
+app.use(express.static('public'));
+app.use(express.json());
+
+// --- Fixed Meeting Data ---
 
 /* =========================
    Configuración general
@@ -33,6 +48,14 @@ app.options('*', cors());
    Datos fijos de la reunión
 ========================= */
 const MEETING = {
+    title: 'Reunión de la sesión de cinética',
+    dateText: 'Monday, 25 August from 5:00 to 6:00pm',
+    timezone: 'America/Mexico_City',
+    startISO: '2025-08-25T17:00:00-06:00', // 5:00pm local time
+    endISO: '2025-08-25T18:00:00-06:00',   // 6:00pm local time
+    joinUrl: 'https://meet.google.com/gsa-btnb-dmq',
+    dialInfo: '(MX) +52 55 8421 0898 PIN: 496 952 841 6855#',
+    morePhones: 'https://tel.meet/gsa-btnb-dmq?pin=4969528416855'
   title: 'Reunión de la sesión de cinética',
   dateText: 'Monday, 25 August from 5:00 to 6:00pm',
   timezone: 'America/Mexico_City',
