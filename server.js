@@ -1,227 +1,302 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const app = express();  
-
+// server.js
 require('dotenv').config();
 
-// allow your Pages site to call the API
-app.use(cors({
-  origin: ['https://kloudpaper.github.io'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type']
-}));
-app.use(express.json());
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
+const { v4: uuidv4 } = require('uuid');
 
+const app = express();
+
+/* =========================
+   Configuración general
+========================= */
+const PORT = process.env.PORT || 3000;
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'https://kloudpaper.github.io')
+  .split(',')
+  .map(s => s.trim());
+
+app.use(express.json());
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // permitir curl/postman
+    const ok = ALLOWED_ORIGINS.includes(origin);
+    cb(ok ? null : new Error('CORS not allowed'), ok);
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.options('*', cors());
 
+/* =========================
+   Datos fijos de la reunión
+========================= */
+const MEETING = {
+  title: 'Reunión de la sesión de cinética',
+  dateText: 'Monday, 25 August from 5:00 to 6:00pm',
+  timezone: 'America/Mexico_City',
+  startISO: '2025-08-25T17:00:00-06:00', // 5:00pm local time
+  endISO:   '2025-08-25T18:00:00-06:00', // 6:00pm local time
+  joinUrl: 'https://meet.google.com/gsa-btnb-dmq',
+  dialInfo: '(MX) +52 55 8421 0898 PIN: 496 952 841 6855#',
+  morePhones: 'https://tel.meet/gsa-btnb-dmq?pin=4969528416855'
+};
 
-// connect to Mongo
-mongoose.connect(process.env.MONGO_URL, {
-  dbName: process.env.MONGO_DB || 'meeting_invite'
-}).then(() => console.log('✅ Mongo connected'))
-  .catch(err => console.error('❌ Mongo error:', err));
+/* =========================
+   Conexión MongoDB
+========================= */
+(async () => {
+  try {
+    const uri = process.env.MONGO_URL;
+    const dbName = process.env.MONGO_DB || 'meeting_invite';
+    if (!uri) {
+      console.warn('[WARN] MONGO_URL no está definido. Los endpoints de DB no funcionarán.');
+    } else {
+      await mongoose.connect(uri, { dbName });
+      console.log('[OK] Conectado a Mongo:', dbName);
+    }
+  } catch (err) {
+    console.error('[ERROR] Conectando a Mongo:', err.message);
+  }
+})();
 
-// define a schema/model
-const Registration = mongoose.model('Registration', new mongoose.Schema({
-  ts: { type: Date, default: Date.now },
+const RegistrationSchema = new mongoose.Schema({
   name: String,
   email: String,
-  position: String,
-  orgType: String,
-  orgName: String,
-  optIn: Boolean,
-  meeting: {
-    title: String,
-    description: String,
-    startsAt: String,
-    endsAt: String,
-    joinUrl: String
+  organization: String,
+  role: String,
+  phone: String,
+  notes: String,
+  consent: { type: Boolean, default: false },
+  source: String,
+  createdAt: { type: Date, default: Date.now }
+}, { versionKey: false });
+
+const Registration = mongoose.models.Registration || mongoose.model('Registration', RegistrationSchema);
+
+/* =========================
+   Template de correo HTML
+========================= */
+function emailHtml({ name }) {
+  return `
+  <center style="width:100%; background-color:#f3f5f7;">
+    <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px; margin:0 auto; background-color:#ffffff;">
+      <tr>
+        <td style="padding:20px 24px; background-color:#0b1220; text-align:left;">
+          <a href="https://www.dikevichimie.com" target="_blank">
+            <img src="https://raw.githubusercontent.com/kloudpaper/dikevi-chimie/main/imagotipo4.png" width="140" alt="Dikevi Chimie" style="display:block; border:0; outline:none; text-decoration:none; height:auto; max-width:100%;">
+          </a>
+          <div style="font-family:Arial, Helvetica, sans-serif; color:#e6edf3; font-size:12px; line-height:18px; margin-top:6px;">
+            Potenciamos todos los procesos industriales con espectroscopía
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:24px;">
+          <h2 style="font-family:Arial, Helvetica, sans-serif; color:#0b1220;">¡Hola ${name}!</h2>
+          <p style="font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#333a45;">
+            Te invitamos a la <strong>${MEETING.title}</strong>.<br>
+            <strong>Fecha:</strong> ${MEETING.dateText}<br>
+            <strong>Zona horaria:</strong> ${MEETING.timezone}
+          </p>
+          <p style="font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#333a45;">
+            <strong>Google Meet:</strong><br>
+            <a href="${MEETING.joinUrl}" style="color:#0b6ef6;">${MEETING.joinUrl}</a><br>
+            <strong>Teléfono:</strong> ${MEETING.dialInfo}<br>
+            <a href="${MEETING.morePhones}" style="color:#0b6ef6;">Más números de teléfono</a>
+          </p>
+          <p style="font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#333a45;">
+            Se adjunta invitación para agregar al calendario.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 24px 32px 24px; background:#f7f9fb;">
+          <p style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:11px; color:#7a8594;">
+             Dikevi Chimie Technologie. Todos los derechos reservados.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </center>
+  `;
+}
+
+/* =========================
+   Utilidades
+========================= */
+function escapeIcs(text) {
+  return String(text || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function buildIcsFromMeeting() {
+  const nowUTC = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const fmtUTC = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const description =
+    `Únete: ${MEETING.joinUrl}\\n` +
+    `Teléfono: ${MEETING.dialInfo}\\n` +
+    `Más teléfonos: ${MEETING.morePhones}`;
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'PRODID:-//Meeting Invite//EN',
+    'VERSION:2.0',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uuidv4()}@meeting-invite`,
+    `DTSTAMP:${nowUTC}`,
+    `DTSTART:${fmtUTC(MEETING.startISO)}`,
+    `DTEND:${fmtUTC(MEETING.endISO)}`,
+    `SUMMARY:${escapeIcs(MEETING.title)}`,
+    `LOCATION:${escapeIcs(MEETING.joinUrl)}`,
+    `DESCRIPTION:${escapeIcs(description)}`,
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  return lines.join('\r\n');
+}
+
+async function sendMail({ to, subject, html, icsBuffer }) {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 465);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.MAIL_FROM || user;
+
+  if (!host || !user || !pass) {
+    throw new Error('SMTP no configurado. Define SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM.');
   }
-}, { versionKey: false }));
 
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass }
+  });
 
+  const attachments = icsBuffer ? [{
+    filename: 'webinar.ics',
+    content: icsBuffer,
+    contentType: 'text/calendar; charset=utf-8; method=PUBLISH'
+  }] : [];
 
-// parse application/json
-// Configure transport via env vars for safety.
-// Example: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true', // true for 465
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
+  return transporter.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    attachments
+  });
+}
+
+/* =========================
+   Endpoints
+========================= */
+app.get('/', (_req, res) => {
+  res.type('text/plain').send('Meeting Invite API is running.\nTry: GET /health, GET /registrations.json, GET /registrations.csv, POST /register');
 });
 
-// Helper: convert ISO date to ICS format YYYYMMDDTHHMMSSZ
-function toICSDate(iso) {
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2,'0');
-  const YYYY = d.getUTCFullYear();
-  const MM = pad(d.getUTCMonth()+1);
-  const DD = pad(d.getUTCDate());
-  const hh = pad(d.getUTCHours());
-  const mm = pad(d.getUTCMinutes());
-  const ss = pad(d.getUTCSeconds());
-  return `${YYYY}${MM}${DD}T${hh}${mm}${ss}Z`;
-}
+app.get('/health', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'meeting-invite',
+    time: new Date().toISOString(),
+    uptime_s: process.uptime()
+  });
+});
 
 app.post('/register', async (req, res) => {
   try {
-    const { name, email, notes, meeting } = req.body;
-    if (!name || !email) return res.status(400).send('Missing name or email');
+    const {
+      name, email, organization, role, phone, notes, consent, source
+    } = req.body || {};
 
-    // meeting metadata fallback
-    const meet = Object.assign({
-      title: "Online Meeting",
-      description: "Meeting",
-      startsAt: new Date(Date.now() + 3*24*3600*1000).toISOString(), // default in 3 days
-      endsAt: new Date(Date.now() + 3*24*3600*1000 + 60*60*1000).toISOString(), // +1h
-      joinUrl: "https://example.com/meeting-link"
-    }, meeting || {});
+    if (!email || !name) {
+      return res.status(400).json({ ok: false, error: 'name y email son obligatorios.' });
+    }
 
-    const uid = crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
-    const dtstamp = toICSDate(new Date().toISOString());
-    const dtstart = toICSDate(meet.startsAt);
-    const dtend = toICSDate(meet.endsAt);
+    // Guarda en Mongo si está conectado
+    let saved = null;
+    if (mongoose.connection.readyState === 1) {
+      saved = await Registration.create({
+        name, email, organization, role, phone, notes, consent: !!consent, source
+      });
+    }
 
-    // Build minimal ICS content (REQUEST method invites calendar clients to accept)
-    const ics =
-`BEGIN:VCALENDAR
-PRODID:-//Your Company//EN
-VERSION:2.0
-CALSCALE:GREGORIAN
-METHOD:REQUEST
-BEGIN:VEVENT
-UID:${uid}
-DTSTAMP:${dtstamp}
-DTSTART:${dtstart}
-DTEND:${dtend}
-SUMMARY:${escapeICSText(meet.title)}
-DESCRIPTION:${escapeICSText(meet.description + "\\n\\nNotes from registrant: " + (notes || ''))}
-LOCATION:${escapeICSText(meet.joinUrl)}
-STATUS:CONFIRMED
-SEQUENCE:0
-TRANSP:OPAQUE
-END:VEVENT
-END:VCALENDAR`;
-
-    // Prepare mail
-    const mailOptions = {
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+    // ICS y correo
+    const ics = buildIcsFromMeeting();
+    await sendMail({
       to: email,
-      subject: `Invitation: ${meet.title}`,
-      text: `Hi ${name},\n\nYou are invited to: ${meet.title}\nWhen: ${meet.startsAt}\nJoin: ${meet.joinUrl}\n\nNotes: ${notes || ''}\n\nThis email includes an .ics calendar invite you can add to your calendar.`,
-      html: `<p>Hi ${escapeHtml(name)},</p>
-             <p>You are invited to <strong>${escapeHtml(meet.title)}</strong>.</p>
-             <p><strong>When:</strong> ${escapeHtml(meet.startsAt)} — ${escapeHtml(meet.endsAt)}</p>
-             <p><a href="${escapeHtml(meet.joinUrl)}">Click to join meeting</a></p>
-             <p>Notes: ${escapeHtml(notes || '')}</p>
-             <p>The calendar invite is attached.</p>`,
-      attachments: [
-        {
-          filename: 'invite.ics',
-          content: ics,
-          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
-        }
-      ]
-    };
-
-    // Send
-    await transporter.sendMail(mailOptions);
-
-    // Save to Mongo (after email was sent successfully)
-    await Registration.create({
-      name,
-      email,
-      notes: notes || '',
-      meeting: {
-        title: meet.title,
-        description: meet.description,
-        startsAt: meet.startsAt,
-        endsAt: meet.endsAt,
-        joinUrl: meet.joinUrl
-      }
+      subject: process.env.MAIL_SUBJECT || 'Confirmación de registro a la reunión',
+      html: emailHtml({ name }),
+      icsBuffer: Buffer.from(ics, 'utf8')
     });
-    // Optionally: save to DB or log registration
-    console.log('Registered:', { name, email, meeting: meet });
 
-    res.json({ ok: true, message: 'Invitation sent' });
+    res.json({
+      ok: true,
+      saved: !!saved,
+      message: 'Registro exitoso. Correo enviado con .ics.'
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error: ' + String(err.message || err));
+    console.error('[ERROR] /register:', err);
+    res.status(500).json({ ok: false, error: 'Error en el servidor.' });
   }
 });
 
-// small helper to escape newline/characters for ICS
-function escapeICSText(s = '') {
-  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
-}
-function escapeHtml(s = '') {
-  return String(s)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#039;');
-}
-
-// Add a friendly root endpoint
-app.get('/', (_req, res) => {
-  res.type('text').send(
-    '✅ Meeting Invite API is running.\n' +
-    'Try: /registrations.json or POST /register'
-  );
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-// List as JSON
+// Descarga JSON (desde MongoDB)
 app.get('/registrations.json', async (_req, res) => {
-  const list = await Registration.find().sort({ ts: -1 }).lean();
-  res.json(list);
-});
-
-// Export as CSV (Excel-friendly)
-app.get('/registrations.csv', async (_req, res) => {
-  const list = await Registration.find().sort({ ts: -1 }).lean();
-
-  const headers = ['ts','name','email','position','orgType','orgName','optIn',
-                   'meeting.title','meeting.description','meeting.startsAt','meeting.endsAt','meeting.joinUrl'];
-
-  const toCell = (obj, path) => {
-    const parts = path.split('.');
-    let cur = obj;
-    for (const p of parts) cur = (cur && cur[p] !== undefined) ? cur[p] : '';
-    const val = cur == null ? '' : String(cur);
-    return /[",\n]/.test(val) ? `"${val.replace(/"/g,'""')}"` : val;
-  };
-
-  const rows = [
-    headers.join(','),
-    ...list.map(r => headers.map(h => toCell(r, h)).join(','))
-  ].join('\r\n');
-
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="registrations.csv"');
-  res.send(rows);
-});
-
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, time: new Date().toISOString() });
-});
-app.get('/health/db', async (_req, res) => {
   try {
-    await mongoose.connection.db.admin().ping();
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ ok: false, error: 'DB no disponible.' });
+    }
+    const items = await Registration.find({}).sort({ createdAt: -1 }).lean();
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.send(JSON.stringify(items, null, 2));
+  } catch (err) {
+    console.error('[ERROR] /registrations.json:', err);
+    res.status(500).json({ ok: false, error: 'Error generando JSON.' });
   }
+});
+
+// Descarga CSV (desde MongoDB)
+app.get('/registrations.csv', async (_req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ ok: false, error: 'DB no disponible.' });
+    }
+    const items = await Registration.find({}).sort({ createdAt: -1 }).lean();
+    const headers = ['name', 'email', 'organization', 'role', 'phone', 'notes', 'consent', 'source', 'createdAt'];
+    const escapeCSV = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const csvLines = [
+      headers.join(',')
+    ].concat(items.map(row => headers.map(h => escapeCSV(row[h])).join(',')));
+
+    const csv = csvLines.join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="registrations.csv"');
+    res.send(csv);
+  } catch (err) {
+    console.error('[ERROR] /registrations.csv:', err);
+    res.status(500).json({ ok: false, error: 'Error generando CSV.' });
+  }
+});
+
+// 404
+app.use((req, res) => {
+  res.status(404).json({ ok: false, error: `Ruta no encontrada: ${req.method} ${req.path}` });
+});
+
+// Arranque
+app.listen(PORT, () => {
+  console.log(`[OK] Meeting Invite API escuchando en puerto ${PORT}`);
 });
