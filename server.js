@@ -202,4 +202,15 @@ app.get('/registrations.csv', async (_req, res) => {
   res.send(rows);
 });
 
-
+// Health check
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
+app.get('/health/db', async (_req, res) => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
