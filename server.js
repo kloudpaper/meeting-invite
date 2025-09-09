@@ -168,6 +168,14 @@ function escapeHtml(s = '') {
     .replace(/'/g,'&#039;');
 }
 
+// Add a friendly root endpoint
+app.get('/', (_req, res) => {
+  res.type('text').send(
+    '✅ Meeting Invite API is running.\n' +
+    'Try: /registrations.json or POST /register'
+  );
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
