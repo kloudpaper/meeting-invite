@@ -16,6 +16,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+app.options('*', cors());
+
+
 // connect to Mongo
 mongoose.connect(process.env.MONGO_URL, {
   dbName: process.env.MONGO_DB || 'meeting_invite'
