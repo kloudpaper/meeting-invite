@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Download registrations</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; max-width: 720px; margin: auto; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; cursor: pointer; margin-right: 8px; }
+    #preview { white-space: pre; background:#f7f7f8; padding:12px; border-radius:10px; border:1px solid #eee; max-height: 360px; overflow:auto; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Download registrations</h1>
+  <p>Fetch the latest registrations directly from the API.</p>
+
+  <button id="btnJson">Download JSON</button>
+  <button id="btnCsv">Download CSV</button>
+  <button id="btnPreview">Preview JSON</button>
+
+  <div id="preview">Click “Preview JSON”…</div>
+
+  <script>
+    const API_BASE = 'https://meeting-invite.onrender.com';
+
+    document.getElementById('btnJson').onclick = async () => {
+      const res = await fetch(`${API_BASE}/registrations.json`, { cache: 'no-store' });
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'registrations.json' });
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    };
+
+    document.getElementById('btnCsv').onclick = () => {
+      window.location.href = `${API_BASE}/registrations.csv`;
+    };
+
+    document.getElementById('btnPreview').onclick = async () => {
+      const res = await fetch(`${API_BASE}/registrations.json`, { cache: 'no-store' });
+      const data = await res.json();
+      document.getElementById('preview').textContent = JSON.stringify(data, null, 2);
+    };
+  </script>
+</body>
+</html>
