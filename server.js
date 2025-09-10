@@ -2,12 +2,9 @@
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
-const { v4: uuidv4 } = require('uuid');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
